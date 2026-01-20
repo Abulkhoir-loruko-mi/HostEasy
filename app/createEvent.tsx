@@ -1,11 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import axios from 'axios';
 import Checkbox from 'expo-checkbox';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
-import { Alert, Button, Image, LayoutAnimation, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Keyboard, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
+//import { supabase, uploadImageToSupabase } from './lib/supabase';
+import { decode } from 'base64-arraybuffer';
+
+// FORCE the use of the legacy Expo FileSystem to avoid warnings/errors
+// This allows us to use readAsStringAsync in Expo SDK 52+
+import * as FileSystem from 'expo-file-system/legacy';
+import { supabase } from './lib/supabase';
+
+
+type Bank = {
+  label: string;
+  value: string;
+};
 
 
 if(Platform.OS==='android' && UIManager.setLayoutAnimationEnabledExperimental){UIManager.setLayoutAnimationEnabledExperimental(true);}
@@ -14,6 +28,7 @@ const DATA=[{id:1, title:'Appearance', description:'upload image , event name an
     {id:2, title:'Schedule', description:'set how and when this event is happening'},
     {id:3, title:'Ticket', description:'set the Ticket policy'}
 ]
+
 
 const platforms=[
 {label:'whatsapp', value:'whatsapp',icon:'whatsapp'},
@@ -29,25 +44,27 @@ const language=[
 {label:'Arabic', value:'arabic'}
 ]
 
-export default function createEvent() {
+export default function CreateEvent({navigation}:{navigation:any}) {
     const[activeid, setActiveid]=useState(null)
-    const[name, setName]=useState('')
+    const[eventName, setEventName]=useState('')
     const[description, setDescription]=useState('')
     const[customUrl, setCustomUrl]=useState('')
     const[photo, setPhoto]=useState<string | null>(null)
     const[uploading, setUploading]= useState(false)
+
     const [online, setOnline]=useState(false)
     const [physical, setPhysical]= useState(false)
     const[PlatformLink, setPlatformlink]=useState('')
-    const[selectePlatform, setselectedPlat]=useState(null);
+    const[selectedPlatform, setselectedPlat]=useState(null);
+    const[selectedLanguage, setselectedLanguage]=useState('')
     const[isFocus, setIsFocus] =useState(false)
     const[single, setSingleEvent]=useState(false)
     const[recurring, setRecurring]=useState(false)
     const[selectedDays, setSelectedDays]=useState<Array<string>>([])
-    const[startdate, setStartDate]= useState(null)
+    const[startDate, setStartDate]= useState(null)
     const[endDate, setEndDate]=useState(null)
     const [endTime, setEndTime]=useState(null)
-    const[starttime, setStartTime]=useState(null)
+    const[startTime, setStartTime]=useState(null)
     const[isStartDatePickerVisible, setStartDatePickerV]=useState(false)
     const[isStartTimePickerVisible, setStartTimePickerVi]=useState(false)
     const[isEndDatePickerVisible, setEndDatePickerV]=useState(false)
@@ -55,7 +72,17 @@ export default function createEvent() {
     const[ispaid, setIsPaid]= useState(false)
     const [tickets, setTickets]=useState([
         {id:Date.now(), name:'', price:'', quantity:''}
-    ])
+    ]);
+    const [businessName, setBusinessName] = useState('');
+    const [bankList, setBankList] = useState([]);
+   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
+    const [isLoadingBanks, setIsLoadingBanks] = useState(false);
+    const [isManualBank, setIsManualBank] = useState(false); 
+    const [manualBankName, setManualBankName] = useState('');
+    const [accountNumber, setAccountNumber] = useState('');
+    const [accountName, setAccountName] = useState(''); 
+    const [isVerifying, setIsVerifying] = useState(false);
+    const[isDraft, setIsDraft]=useState(true);
 
 
 
@@ -63,6 +90,8 @@ export default function createEvent() {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setActiveid(id===activeid? null:id)
     }
+
+
     const pickImage = async ()=>{
         let result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes:['images'],
@@ -75,39 +104,180 @@ export default function createEvent() {
         }
     };
 
-    const upLoadToServer=async()=>{
-        if(!photo)return;
-        setUploading(true);
-        let localUri: string = photo;
-        let filename: any = localUri.split('/').pop();
-        let match = /\.(\w+)$/.exec(filename);
-        let type = match ? 'photo/${match[1]}':'photo';
+    const uploadImageToSupabase = async (uri:any) => {
+  try {
+    if (!uri) return null;
 
-        let formData= new FormData();
-        const response = await fetch(localUri);
-        const blob = await response.blob();
-        formData.append('photo', blob, filename)
+    // 1. Create a unique file path
+    const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpeg';
+    const fileName = `${Date.now()}.${fileExt}`;
+    const filePath = `event-images/${fileName}`;
 
-        try{
-            let response = await fetch('',
-                {
-                    method:'POST',
-                    body:formData,
-                    headers:{'content-type':'multipart/form-data'}
-                }
-            )
-            let responseJson = await response.json();
-            Alert.alert('success', 'image oploaded!')
-            setPhoto(null);
+    // 2. Read the file as a Base64 String
+    // (This avoids the "Blob" issues that cause Network Errors)
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
 
-        }catch(error){
-            Alert.alert('Error', 'Upload failed')
+    // 3. Convert to ArrayBuffer (Raw Binary)
+    const fileData = decode(base64);
 
-        }finally{
-            setUploading(false)
+    // 4. Upload!
+    const { data, error } = await supabase.storage
+      .from('events') // Make sure this bucket exists!
+      .upload(filePath, fileData, {
+        contentType: `image/${fileExt}`,
+        upsert: false
+      });
 
-        }
+    if (error) {
+      // If error is "newtwork request failed", it might be file size
+      console.error("Supabase Upload Error:", error);
+      throw error;
     }
+
+    // 5. Get Public URL
+    const { data: urlData } = supabase.storage
+      .from('events')
+      .getPublicUrl(filePath);
+
+    return urlData.publicUrl;
+
+  } catch (error) {
+    console.error("Upload failed:", error);
+    alert("Image upload failed. Please try again.");
+    return null;
+  }
+};
+ 
+
+
+
+
+
+
+
+const saveEventToDB = async (status:any) => {
+    // 1. Upload Image (using helper from before)
+    if (!photo) return null;
+    const imageUrl = await uploadImageToSupabase(photo);
+    if (!imageUrl) return null;
+
+    const prepareEventData = async () => {
+  
+
+  const fullStartDateTime = combineDateAndTime(startDate, startTime);
+  const fullEndDateTime = combineDateAndTime(endDate, endTime);
+
+
+  const settlementPayload = ispaid ? {
+      business_name: businessName,
+      bank_name: isManualBank ? manualBankName : selectedBank?.label, // Get the name, not just ID
+      bank_code: isManualBank ? null : selectedBank?.value,
+      account_number: accountNumber,
+      account_name: accountName
+  } : null;
+
+  // Get current user
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // 5. RETURN THE FINAL OBJECT FOR SUPABASE
+  return {
+    title: eventName,
+    description: description,
+    image_url: imageUrl, // Ensure you uploaded the photo first!
+    custom_url: customUrl,
+
+    is_online: online,    
+    is_physical: physical, 
+
+    location_details: {
+    platform: selectedPlatform,
+    link: PlatformLink,         
+  
+    address: physical
+  },
+    
+    language: selectedLanguage,
+    
+    is_recurring: recurring,
+    recurring_days: selectedDays, // Supabase accepts arrays directly
+    
+    start_date: fullStartDateTime,
+    end_date: fullEndDateTime,
+    
+    is_paid: ispaid,
+    tickets: tickets, // Saves the whole array as JSON automatically
+    
+    settlement_info: settlementPayload, // Saves as JSON
+    
+    status: isDraft ? 'draft' : 'published',
+    organizer_id: user?.id
+  };
+};
+
+// --- HELPER TO MERGE DATE + TIME ---
+interface DateTimeObject extends Date {}
+
+const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObject | null): string | null => {
+    if (!dateObj || !timeObj) return null;
+    
+    const date = new Date(dateObj);
+    const time = new Date(timeObj);
+    
+    // Set the hours/minutes of the Date object to match the Time object
+    date.setHours(time.getHours());
+    date.setMinutes(time.getMinutes());
+    
+    return date.toISOString(); // Returns "2025-10-25T14:30:00.000Z"
+};
+    
+
+    // 3. Insert into Supabase
+    const eventData = await prepareEventData();
+    const { data, error } = await supabase
+      .from('events')
+      .insert([eventData])
+      .select(); // .select() is crucial to get the new ID back!
+
+    if (error) {
+      alert(error.message);
+      return null;
+    }
+    return data[0]; // Return the created event object
+  };
+
+  // --- BUTTON 1: SAVE AS DRAFT ---
+  const handleSaveDraft = async () => {
+     setUploading(true)
+    const newEvent = await saveEventToDB('draft');
+    if (newEvent) {
+     setUploading(false)
+      alert("Event saved to Drafts!");
+      navigation.navigate('EventPage'); 
+    }
+  };
+
+  // --- BUTTON 2: SAVE & CONTINUE ---
+  const handleSaveAndContinue = async () => {
+    setUploading(true)
+    // Validate inputs first!
+    if (!eventName || !startDate) return alert("Please fill basic info");
+
+    // Save as 'draft' first (or a temp status), then move to next screen
+    const newEvent = await saveEventToDB('draft'); 
+    
+    if (newEvent) {
+        setUploading(false)
+      // NAVIGATE TO PUBLISH PAGE
+      // We pass the 'eventId' so the next page knows what to fetch/update
+      navigation.navigate('PublishEvent', { 
+        eventId: newEvent.id, 
+        previewImage: newEvent.image_url,
+        previewTitle: newEvent.title
+      });
+    }
+  };
 
    
 
@@ -122,7 +292,7 @@ export default function createEvent() {
     }
 
     const handleConfirmEndDate=(date:any)=>{
-        if(startdate && date< startdate){
+        if(startDate && date< startDate){
             setEndDatePickerV(false)
             Alert.alert('Notice', 'End date can not be before start date')
         }
@@ -156,7 +326,7 @@ export default function createEvent() {
         }
         setEndTime(date)
         setEndTimePickerVi(false)
-        if(starttime && date < starttime){
+        if(startTime && date < startTime){
             setEndTimePickerVi(false)
             Alert.alert("Invalid Time", "End time is erlier than start time")
             return;
@@ -224,6 +394,77 @@ export default function createEvent() {
 
     }
 
+    useEffect(()=>{
+        fetchBanks();
+    },[])
+
+    const fetchBanks= async()=>{
+        setIsLoadingBanks(true)
+
+        try {
+            const response =await axios.get("https://api.paystack.co/bank") 
+                    if (response.data && response.data.status) {
+                        const formattedBanks = response.data.data.map((bank: { name: any; code: any; }) => ({
+                            label: bank.name,
+                            value: bank.code, 
+                        }));
+                        setBankList(formattedBanks);
+                    }
+
+
+            
+        } catch (error) {
+            Alert.alert("Error", "Could not load bank list. Please input manually.");
+            
+        }finally{
+            setIsLoadingBanks(false);
+        }
+
+    }
+
+    useEffect(()=>{
+        if (accountNumber.length === 10 && selectedBank && !isManualBank) {
+            verifyAccountDetails();
+
+        } else if (accountNumber.length < 10) {
+            setAccountName(''); 
+        }
+
+    }, [accountNumber, selectedBank])
+
+    const verifyAccountDetails=async ()=>{
+            setIsVerifying(true);
+            Keyboard.dismiss(); 
+
+            try {
+                Alert.alert(`Verifying ${accountNumber} with bank code ${selectedBank}`);
+
+                     // const res = await axios.get(`https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${selectedBank}`, { headers: { Authorization: 'Bearer YOUR_SECRET_KEY' }});
+
+                    setTimeout(() => {
+                        // Simulate a success
+                        setAccountName("OLADEJI SOOLIU AYANTUNJI"); 
+                        setIsVerifying(false);
+                    }, 1500);
+
+                
+            } catch (error) {
+
+                setAccountName('');
+                Alert.alert("Verification Failed", "Could not verify account details.");
+                setIsVerifying(false);
+                
+
+                
+            }
+
+
+    };
+
+ 
+
+
+
 
 
     const renderContent=(id:any)=>{
@@ -234,10 +475,10 @@ export default function createEvent() {
                         <TextInput
                         style={styles.input}
                         placeholder='Event name'
-                        value={name}
-                        onChangeText={setName}
+                        value={eventName}
+                        onChangeText={setEventName}
                         />
-                        <Text style={[styles.text, {color:'#666', marginBottom:10}]}>chose a clear and descriptive name for your event</Text>
+                        <Text style={[styles.text, {color:'#666', marginBottom:10}]}>Chose a clear and descriptive name for your event</Text>
                           <TextInput
                         style={styles.input}
                         placeholder='Event description'
@@ -246,7 +487,7 @@ export default function createEvent() {
                         multiline={true}
                         
                         />
-                        <Text style={[styles.text, {color:'#666', paddingBottom:20}]}>write a description of your event</Text>
+                        <Text style={[styles.text, {color:'#666', paddingBottom:20}]}>Write a description of your event</Text>
 
                         <TextInput
                         style={styles.input}
@@ -254,7 +495,7 @@ export default function createEvent() {
                         value={customUrl}
                         onChangeText={setCustomUrl}
                         />
-                        <Text style={[styles.text, {color:'#666', marginBottom:20}]}>chose a custom url</Text>
+                        <Text style={[styles.text, {color:'#666', marginBottom:20}]}>Chose a custom url</Text>
 
                         <View style={[styles.previewContainer,{backgroundColor:'#34066fff', padding:10}]}>
 
@@ -376,7 +617,7 @@ export default function createEvent() {
                                 valueField='value'
                                 placeholder={!isFocus ? 'Choose Language': '...'}
                                 onChange={item=>{
-                                    setselectedPlat(item.value);
+                                    setselectedLanguage(item.value);
                                     setIsFocus(false)
                                 }}
                                 
@@ -422,7 +663,7 @@ export default function createEvent() {
                              <Text style={styles.title}>Start Date</Text>
                             
                             <TouchableOpacity style={[styles.pickerbox]} onPress={()=>setStartDatePickerV(true)} >
-                                <Text style={{fontSize:16}}>{formatDate(startdate)}</Text>
+                                <Text style={{fontSize:16}}>{formatDate(startDate)}</Text>
                                 <MaterialIcons name='date-range' size={12}/>
 
                             </TouchableOpacity>
@@ -452,7 +693,7 @@ export default function createEvent() {
                                 mode='date'
                                 onConfirm={handleConfirmEndDate}
                                 onCancel={()=>setEndDatePickerV(false)}
-                                minimumDate={startdate? new Date(startdate):undefined}
+                                minimumDate={startDate? new Date(startDate):undefined}
                                 
                                 />
 
@@ -468,7 +709,7 @@ export default function createEvent() {
                            
                             <Text style={styles.title}>Start Time</Text>
                             <TouchableOpacity style={[styles.pickerbox, ]} onPress={handleConfirmStartTime} >
-                                <Text style={{fontSize:16}}>{formatTime(starttime)}</Text>
+                                <Text style={{fontSize:16}}>{formatTime(startTime)}</Text>
                                 <MaterialIcons name='timer' />
 
                             </TouchableOpacity>
@@ -496,7 +737,7 @@ export default function createEvent() {
                                 mode='time'
                                 onConfirm={handleConfirmEndTime}
                                 onCancel={()=>setEndTimePickerVi(false)}
-                                 minimumDate={starttime? new Date(starttime):undefined}
+                                 minimumDate={startTime? new Date(startTime):undefined}
                                
                                 
                                 />
@@ -517,45 +758,87 @@ export default function createEvent() {
 
                                 <View style={{flexDirection:'row', flexWrap:'wrap', justifyContent:'center', marginVertical:10}}>
                                     {
-                                    DAYS.map((day)=>{
-                                        const isSelected= selectedDays.includes(day.index.toString());
-                                        return(
-                                            <TouchableOpacity
-                                                key={day.index}
-                                                style={[styles.dayButton, isSelected && styles.selectedDayButton]}
-                                                onPress={() => toggleDay(day.index)}
-                                            >
-                                                <Text style={[styles.dayText, isSelected && styles.selectedDayText]}>{day.label}</Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })
-                                }
+                                            DAYS.map((day)=>{
+                                                const isSelected= selectedDays.includes(day.index.toString());
+                                                return(
+                                                    <TouchableOpacity
+                                                        key={day.index}
+                                                        style={[styles.dayButton, isSelected && styles.selectedDayButton]}
+                                                        onPress={() => toggleDay(day.index)}
+                                                    >
+                                                        <Text style={[styles.dayText, isSelected && styles.selectedDayText]}>{day.label}</Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })
+                                   }
 
                                 </View>
+
+                                
+                         <View >
+                             <Text style={styles.title}>Start Date</Text>
+                            
+                            <TouchableOpacity style={[styles.pickerbox]} onPress={()=>setStartDatePickerV(true)} >
+                                <Text style={{fontSize:16}}>{formatDate(startDate)}</Text>
+                                <MaterialIcons name='date-range' size={12}/>
+
+                            </TouchableOpacity>
+
+                            <DateTimePickerModal
+                                isVisible={isStartDatePickerVisible}
+                                mode='date'
+                                onConfirm={handleConfirmStartDate}
+                                onCancel={()=>setStartDatePickerV(false)}
+                                minimumDate={new Date()}
+                                
+                                />
+
+                         </View>
+
+                         <View >
+                            <Text style={styles.title}>End Date</Text>
+                           
+                            
+                            <TouchableOpacity style={[styles.pickerbox, ]} onPress={()=>setEndDatePickerV(true)} >
+                                <Text style={{fontSize:16}}>{formatDate(endDate)}</Text>
+                                <MaterialIcons name='date-range' />
+
+                            </TouchableOpacity>
+                            <DateTimePickerModal
+                                isVisible={isEndDatePickerVisible}
+                                mode='date'
+                                onConfirm={handleConfirmEndDate}
+                                onCancel={()=>setEndDatePickerV(false)}
+                                minimumDate={startDate? new Date(startDate):undefined}
+                                
+                                />
+
+    
+                         </View>
 
                                 
 
                                 <View style={{flexDirection:'row', justifyContent:'space-evenly'}}>
 
-                         <View>
-                           
-                            <Text style={styles.title}>Start Time</Text>
-                            <TouchableOpacity style={[styles.pickerbox, ]} onPress={handleConfirmStartTime} >
-                                <Text style={{fontSize:16}}>{formatTime(starttime)}</Text>
-                                <MaterialIcons name='timer' size={24}/>
+                                    <View>
+                                    
+                                        <Text style={styles.title}>Start Time</Text>
+                                        <TouchableOpacity style={[styles.pickerbox, ]} onPress={handleConfirmStartTime} >
+                                            <Text style={{fontSize:16}}>{formatTime(startTime)}</Text>
+                                            <MaterialIcons name='timer' size={24}/>
 
-                            </TouchableOpacity>
-                            <DateTimePickerModal
-                            isVisible={isStartTimePickerVisible}
-                            mode='time'
-                            onConfirm={handleConfirmStartTime}
-                            onCancel={()=>setStartTimePickerVi(false)}
-                            minimumDate={new Date()}
-                            
-                            />
-                         </View>
+                                        </TouchableOpacity>
+                                        <DateTimePickerModal
+                                        isVisible={isStartTimePickerVisible}
+                                        mode='time'
+                                        onConfirm={handleConfirmStartTime}
+                                        onCancel={()=>setStartTimePickerVi(false)}
+                                        minimumDate={new Date()}
+                                        
+                                        />
+                                    </View>
 
-                         <View>
+                                <View>
                             
                             <Text style={styles.title}>End Time</Text>
                             <TouchableOpacity style={[styles.pickerbox,]} onPress={handleConfirmEndTime} >
@@ -569,7 +852,7 @@ export default function createEvent() {
                                 mode='time'
                                 onConfirm={handleConfirmEndTime}
                                 onCancel={()=>setEndTimePickerVi(false)}
-                               minimumDate={starttime? new Date(starttime):undefined}
+                               minimumDate={startTime? new Date(startTime):undefined}
                                 
                                 />
 
@@ -663,11 +946,117 @@ export default function createEvent() {
                                     <Text>+ Add Another Ticket Type</Text>
                                 </TouchableOpacity>
                             )
+
+                           
                         }
+
+                         {ispaid &&(
+
+                              <View style={styles.containera}>
+
+                        <Text style={styles.header}>Settlement Details</Text>
+                        <Text style={styles.label}>Business / Display Name</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="e.g. Abulkhoir Tech Hub"
+                            value={businessName}
+                            onChangeText={setBusinessName}
+                        />
+
+                        <View style={styles.rowBetween}>
+                            <Text style={styles.label}>Bank Name</Text>
+                            <TouchableOpacity onPress={() => setIsManualBank(!isManualBank)}>
+                            <Text style={styles.linkText}>
+                                {isManualBank ? "Select from list" : "Bank not listed?"}
+                            </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {isManualBank ? (
+                       
+                            <TextInput
+                            style={styles.input}
+                            placeholder="Enter Bank Name manually"
+                            value={manualBankName}
+                            onChangeText={setManualBankName}
+                            />
+                        ): (
+                           
+                            <Dropdown
+                            style={styles.dropdown}
+                            placeholderStyle={styles.placeholderStyle}
+                            selectedTextStyle={styles.selectedTextStyle}
+                            inputSearchStyle={styles.inputSearchStyle}
+                            data={bankList}
+                            search
+                            maxHeight={300}
+                            labelField="label"
+                            valueField="value"
+                            placeholder={isLoadingBanks ? "Loading banks..." : "Select Bank"}
+                            searchPlaceholder="Search bank..."
+                            value={selectedBank}
+                            onChange={item => {
+                            setSelectedBank(item.value);
+                            setAccountName(''); // Reset verification if bank changes
+                        }}
+                        />
+                    )}
+
+                     <Text style={styles.label}>Account Number</Text>
+                     <View style={styles.accountContainer}> 
+                        <TextInput
+                          style={[styles.input, { flex: 1, marginBottom: 0, borderRightWidth: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }]}
+                          placeholder="0123456789"
+                            keyboardType="numeric"
+                            maxLength={10}
+                            value={accountNumber}
+                            onChangeText={setAccountNumber}
+
+                        />
+
+                        <View style={styles.statusBox}>
+                            {isVerifying ? (
+
+                            <ActivityIndicator size="small" color="#007BFF" />
+                            
+                            ) : accountName ? (
+                                <Text style={{color: 'green'}}>✓</Text>
+                            ) : (
+                                <Text style={{color: '#ccc'}}>?</Text>
+                            )}
+
+
+                        </View>
+
+                     </View>
+
+                        {accountName ? (
+                            <View style={styles.verifiedBox}>
+                            <Text style={styles.verifiedLabel}>Verified Account Name:</Text>
+                            <Text style={styles.verifiedName}>{accountName}</Text>
+                            </View>
+                        ) : null}
+
+                     
+
+
+
+
+
+
+
+
+
+
+                       </View>
+                                
+                            )}
+
 
                       
 
-                       
+
+
                     </View>
                     
                 )
@@ -681,7 +1070,7 @@ export default function createEvent() {
       <View style={styles.headerContainer}>
         <TouchableOpacity>
           
-          <Text style={[{fontSize:20, fontWeight:'bold'}]}>HILAQ</Text>
+          <Text style={[{fontSize:20, fontWeight:'bold'}]}>EVENT</Text>
 
         </TouchableOpacity>
       <View style={styles.headerContainer}>
@@ -701,19 +1090,19 @@ export default function createEvent() {
         </View>
 
         <ScrollView style={styles.containerscr}>
+
             {DATA.map((item)=>{
                 const isOpen=item.id===activeid;
 
                 return(
                     <View key={item.id} style={styles.card}>
+
                         <TouchableOpacity
                             activeOpacity={0.8}
                             onPress={()=>toggleExpand(item.id)}
                             style={styles.cardHeader}
                             >
-                                
-                           
-                            
+                  
                             <View>
                                 <Text style={styles.title}>{item.title}</Text>
                                 <Text style={styles.description}>{item.description}</Text>
@@ -733,10 +1122,26 @@ export default function createEvent() {
         </ScrollView>
 
         <View style={{flexDirection:'row', justifyContent:'flex-end', alignItems:'baseline'}}>
-            <Button title='save as draft' disabled={!photo}
-             onPress={upLoadToServer}></Button>
-            <Button title='save and continue' disabled={!photo}
-             onPress={upLoadToServer}></Button>
+            <Pressable style={styles.Button} onPress={handleSaveDraft}>
+                      {uploading ? (
+            <ActivityIndicator size="large" color="#0000ff" />
+          ) : (
+            <Text style={styles.buttontext}>Save as draft</Text>
+          )}
+               
+            </Pressable>
+
+              <Pressable style={styles.Button} onPress={handleSaveAndContinue}>
+                
+                   {uploading ? (
+            <ActivityIndicator size="large" color="#0000ff" />
+          ) : (
+            <Text style={styles.buttontext}>Save and continue</Text>
+          )}
+               
+            </Pressable>
+
+            
        
                                
           </View>
@@ -792,11 +1197,14 @@ const styles= StyleSheet.create({
         backgroundColor:'#fff',
         borderRadius:8
     },
-    dropdown:
-        {height:40,
-            alignItems:'center',
-            justifyContent:'center',
-             paddingHorizontal:12,marginEnd:20, borderWidth:1,borderColor:'#ccc'}
+    dropdown:{height:40,
+        alignItems:'center',
+        justifyContent:'center',
+        paddingHorizontal:12,
+        marginEnd:20,
+        borderWidth:1,
+        borderColor:'#ccc'
+    }
     ,
     dropdowns:{
         height:40,
@@ -881,6 +1289,18 @@ const styles= StyleSheet.create({
         borderWidth: 1,
         borderColor: '#ccc',
     },
+     Button: {
+        width: '40%',
+       // height: '40%',
+        padding: 10,
+        margin: 5,
+        borderRadius: 8,
+        backgroundColor: '#eee',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#ccc',
+    },
     selectedDayButton: {
         backgroundColor: '#007BFF',
     },
@@ -941,5 +1361,53 @@ const styles= StyleSheet.create({
         fontSize:12, color:"#555",
         marginBottom:5
 
-    }
-})
+    },
+     buttontext:{
+        //color: 'white',
+        fontSize: 16,
+        textAlign: 'center',
+    },
+
+      containera: { padding: 20, backgroundColor: '#f9f9f9', borderRadius: 10, borderWidth: 1, borderColor: '#eee' },
+  header: { fontSize: 18, fontWeight: 'bold', marginBottom: 20, color: '#333' },
+  
+
+  
+  // Header Row for "Bank not listed?"
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  linkText: { color: '#007BFF', fontSize: 12, fontWeight: '600' },
+
+ 
+  placeholderStyle: { fontSize: 16, color: '#999' },
+  selectedTextStyle: { fontSize: 16, color: '#333' },
+  inputSearchStyle: { height: 40, fontSize: 16 },
+
+  // Account Number Row
+  accountContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
+  statusBox: {
+    height: 52, // Match input height roughly
+    width: 50,
+    backgroundColor: '#e9ecef',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderLeftWidth: 0,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+
+  // Verified Name Box
+  verifiedBox: {
+    marginTop: 10,
+    backgroundColor: '#d4edda',
+    borderColor: '#c3e6cb',
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: 6,
+    alignItems: 'center'
+  },
+  verifiedLabel: { color: '#155724', fontSize: 12 },
+  verifiedName: { color: '#155724', fontWeight: 'bold', fontSize: 16, marginTop: 2 }
+});
+

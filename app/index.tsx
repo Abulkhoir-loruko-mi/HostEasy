@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useNavigation } from 'expo-router';
 import React from 'react';
 import { Button, View } from 'react-native';
 
@@ -6,26 +6,44 @@ import { Button, View } from 'react-native';
     
 
 
-export default function index({navigation}: {navigation: any}) {
+export default function Index() {
+
+  const navigation = useNavigation<any>();
 
      const goToLogin = () => {
-    
+      navigation.navigate('/authScreen');
+    }
+
+    const goTosignup = () => {
+      navigation.navigate('/signUp');
+    }
+
+     const goToCreateEvent = () => {
    
-      navigation.push('authScreen');
-     
+      navigation.navigate('/createEvent');
    
-     
     }
 
   return (
+
+
     <View>
       
       <Button title='go to login' onPress={
        goToLogin
       }></Button>
 
-       <Link href="/authScreen">Go to About</Link>
+    
+
+       <Button title='Go to Create Event' onPress={
+       goToCreateEvent
+      }></Button>
+
         <Link href="/createEvent">CreateEvent</Link>
+
+        <Button title='Go to Sign up' onPress={
+       goTosignup
+      }></Button>
     </View>
   )
 }

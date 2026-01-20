@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "myLearn",
-    "slug": "myLearn",
+    "name": "HostEasy",
+    "slug": "HostEasy",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mylearn",
+    "scheme": "HostEasy",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
