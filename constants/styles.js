@@ -19,10 +19,31 @@ const gStyles= StyleSheet.create({
       
       backgroundColor:'#02200fff'
    },
+   previewContainer:{
+        marginBottom:20,
+        alignItems:'center'
+    },
+   placeholderImage:{width:200,
+    height:200,
+    backgroundColor:'#eee',
+    borderRadius:10,
+    justifyContent:'center',
+    alignItems:'center'
+   },
+ 
+   disabledbox:{
+    backgroundColor:'#eee',
+    borderColor:'#eee'
+   },
+   placeHoldertext:{color:'#888'},
+   image:{width:200,
+    height:200,
+    borderRadius:10
+},
     container3: {
       flex:1,
       position:'absolute',
-      height:680,
+      height:'78%',
       bottom:0,
       width:'100%',
       //alignItems:'center',

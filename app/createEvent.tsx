@@ -1,14 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import axios from 'axios';
+import { decode } from 'base64-arraybuffer';
 import Checkbox from 'expo-checkbox';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Keyboard, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-//import { supabase, uploadImageToSupabase } from './lib/supabase';
-import { decode } from 'base64-arraybuffer';
 
 // FORCE the use of the legacy Expo FileSystem to avoid warnings/errors
 // This allows us to use readAsStringAsync in Expo SDK 52+
@@ -51,14 +50,14 @@ export default function CreateEvent({navigation}:{navigation:any}) {
     const[customUrl, setCustomUrl]=useState('')
     const[photo, setPhoto]=useState<string | null>(null)
     const[uploading, setUploading]= useState(false)
-
+     const[uploadingd, setUploadingd]= useState(false)
     const [online, setOnline]=useState(false)
     const [physical, setPhysical]= useState(false)
     const[PlatformLink, setPlatformlink]=useState('')
     const[selectedPlatform, setselectedPlat]=useState(null);
     const[selectedLanguage, setselectedLanguage]=useState('')
     const[isFocus, setIsFocus] =useState(false)
-    const[single, setSingleEvent]=useState(false)
+    const[single, setSingleEvent]=useState(true)
     const[recurring, setRecurring]=useState(false)
     const[selectedDays, setSelectedDays]=useState<Array<string>>([])
     const[startDate, setStartDate]= useState(null)
@@ -83,6 +82,16 @@ export default function CreateEvent({navigation}:{navigation:any}) {
     const [accountName, setAccountName] = useState(''); 
     const [isVerifying, setIsVerifying] = useState(false);
     const[isDraft, setIsDraft]=useState(true);
+      const [errors, setErrors] = useState<Record<string, string>>({});
+
+      const ErrorText = ({ error }:any) => {
+    if (!error) return null;
+    return <Text style={{ color: 'red', fontSize: 12, marginTop: 5 }}>{error}</Text>;
+}
+
+
+
+
 
 
 
@@ -152,14 +161,11 @@ export default function CreateEvent({navigation}:{navigation:any}) {
  
 
 
-
-
-
-
-
 const saveEventToDB = async (status:any) => {
+    
     // 1. Upload Image (using helper from before)
-    if (!photo) return null;
+    if (!photo) return alert("Please select an event image");
+
     const imageUrl = await uploadImageToSupabase(photo);
     if (!imageUrl) return null;
 
@@ -249,10 +255,12 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
 
   // --- BUTTON 1: SAVE AS DRAFT ---
   const handleSaveDraft = async () => {
-     setUploading(true)
+     if (!eventName || !startDate || !endDate) return alert("Please fill basic info:Eventname , start/end date and time");
+    
     const newEvent = await saveEventToDB('draft');
+     setUploadingd(true)
     if (newEvent) {
-     setUploading(false)
+     setUploadingd(false)
       alert("Event saved to Drafts!");
       navigation.navigate('EventPage'); 
     }
@@ -260,9 +268,16 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
 
   // --- BUTTON 2: SAVE & CONTINUE ---
   const handleSaveAndContinue = async () => {
-    setUploading(true)
+   
     // Validate inputs first!
+
+    if (!validateDraftForm()) {
+      Alert.alert("Validation Error", "Please fix the errors highlighted in red.");
+      return; // Stop execution if invalid
+  }
     if (!eventName || !startDate) return alert("Please fill basic info");
+
+     setUploading(true)
 
     // Save as 'draft' first (or a temp status), then move to next screen
     const newEvent = await saveEventToDB('draft'); 
@@ -274,7 +289,9 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
       navigation.navigate('PublishEvent', { 
         eventId: newEvent.id, 
         previewImage: newEvent.image_url,
-        previewTitle: newEvent.title
+        previewTitle: newEvent.title,
+        startDate:newEvent.start_date,
+        description:newEvent.description,
       });
     }
   };
@@ -462,7 +479,102 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
     };
 
  
+    const validateDraftForm = () => {
+    let isValid = true;
+    let tempErrors: Record<string, string> = {};
 
+    
+
+    // --- Basic Info ---
+    if (!eventName.trim()) {
+        tempErrors.eventName = "Event title is required";
+        isValid = false;
+    }
+    if (!description.trim()) {
+        tempErrors.description = "Description is required";
+        isValid = false;
+    }
+
+    // --- Dates & Times ---
+    if (!startDate || !startTime) {
+        tempErrors.startDate = "Start date and time are required";
+        isValid = false;
+    }
+    if (!endDate || !endTime) {
+        tempErrors.endDate = "End date and time are required";
+        isValid = false;
+    }
+
+    interface DateTimeObject extends Date {}
+
+    const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObject | null): string | null => {
+        if (!dateObj || !timeObj) return null;
+        
+        const date = new Date(dateObj);
+        const time = new Date(timeObj);
+        
+        // Set the hours/minutes of the Date object to match the Time object
+        date.setHours(time.getHours());
+        date.setMinutes(time.getMinutes());
+        
+        return date.toISOString(); // Returns "2025-10-25T14:30:00.000Z"
+    };
+
+    
+
+    // Check if End is after Start (Only run if dates exist)
+
+      if (startDate && startTime && endDate && endTime) {
+            const startDateTime = combineDateAndTime(startDate, startTime); // Use your helper fn
+            const endDateTime = combineDateAndTime(endDate, endTime);
+            
+            if (!startDateTime || !endDateTime) {
+                tempErrors.endDate = "Invalid start or end time";
+                isValid = false;
+            } else if (new Date(endDateTime) <= new Date(startDateTime)) {
+                tempErrors.endDate = "End time must be after start time";
+                isValid = false;
+            }
+        }
+
+
+    // --- Location ---
+    if (!online && !physical) {
+        tempErrors.location = "Please select at least one location type (Online or Physical)";
+        isValid = false;
+    }
+    if (online && !PlatformLink.trim()) {
+        tempErrors.platformLink = "Online meeting link is required";
+        isValid = false;
+    }
+
+    // --- Tickets & Payments ---
+    if (ispaid) {
+        // 1. Check Tickets Exist
+        if (tickets.length === 0) {
+            tempErrors.tickets = "Paid events must have at least one ticket type";
+            isValid = false;
+        } else {
+            // 2. we Check indvidual ticket fields exist
+            // We assume tickets is an array like [{name:'', price:'', quantity:''}]
+            const incompleteTicket = tickets.find(t => !t.name || !t.price || !t.quantity);
+            if (incompleteTicket) {
+                tempErrors.tickets = "All tickets must have a Name, Price, and Quantity";
+                isValid = false;
+            }
+        }
+
+        // 3.we Check Settlement Info
+        // Crucial: We only check if accountName exists. This proves verification passed.
+        if (!accountName) {
+            tempErrors.bank = "Please enter and verify bank account details";
+            isValid = false;
+        }
+    }
+
+    setErrors(tempErrors);
+    return isValid;
+    };
 
 
 
@@ -473,20 +585,31 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
                 return(
                     <View style={styles.container}>
                         <TextInput
-                        style={styles.input}
+                        style={[styles.input, errors.eventName && { borderColor: 'red' }]}
                         placeholder='Event name'
                         value={eventName}
-                        onChangeText={setEventName}
+                       onChangeText={(text) => {
+                        setEventName(text);
+                        // Optional: Clear error as soon as they start typing again
+                        if (errors.eventName) setErrors({...errors, eventName: ''});
+                    }}
                         />
+                        <ErrorText error={errors.eventName} />
+
                         <Text style={[styles.text, {color:'#666', marginBottom:10}]}>Chose a clear and descriptive name for your event</Text>
                           <TextInput
-                        style={styles.input}
+                        style={[styles.input, errors.eventDescription && { borderColor: 'red' }]}
                         placeholder='Event description'
                         value={description}
-                        onChangeText={setDescription}
+                         onChangeText={(text) => {
+                        setDescription(text);
+                        // Optional: Clear error as soon as they start typing again
+                        if (errors.eventDescription) setErrors({...errors, eventDescription: ''});
+                    }}
                         multiline={true}
                         
                         />
+                        <ErrorText error={errors.eventDescription} />
                         <Text style={[styles.text, {color:'#666', paddingBottom:20}]}>Write a description of your event</Text>
 
                         <TextInput
@@ -598,14 +721,7 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
                                 style={styles.input}
                                 placeholder='Venue Address' />
                             </View>
-                        )}
-
-
-                        
-
-
-
-                        
+                        )}     
 
                         <Text style={[styles.title,{padding:10}]}>Language</Text>
                         
@@ -622,6 +738,7 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
                                 }}
                                 
                                 />
+
                                 <></>
                        
 
@@ -631,7 +748,10 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
                             <View style={{flexDirection:'row', padding:10,alignItems:'center'}}>
                             <Checkbox
                             value={single}
-                            onValueChange={setSingleEvent}
+                               onValueChange={(val) => {
+                                setSingleEvent(val);
+                                if (val) setRecurring(false);
+                            }}
                             color={single? '#4630EB' :undefined}
                             />
                             <Text style={{padding:10}}>Single Event</Text>
@@ -640,7 +760,10 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
                         <View style={{flexDirection:'row', padding:10, alignItems:'center'}}>
                             <Checkbox
                             value={recurring}
-                            onValueChange={setRecurring}
+                               onValueChange={(val) => {
+                                setRecurring(val);
+                                if (val) setSingleEvent(false);
+                            }} 
                             color={recurring? '#4630EB' :undefined}
                             />
                             <Text style={{padding:10}}>Recurring</Text>
@@ -657,29 +780,29 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
                             <View>
                                 <Text style={{padding:10, color:'#666'}}>You can set single event details after creating the event</Text>
 
-                                 <View style={{flexDirection:'row', justifyContent:'space-evenly'}}>
+                                 <View style={{flexDirection:'row', padding:10, flex:1,justifyContent:'space-evenly'}}>
 
-                         <View >
-                             <Text style={styles.title}>Start Date</Text>
-                            
-                            <TouchableOpacity style={[styles.pickerbox]} onPress={()=>setStartDatePickerV(true)} >
-                                <Text style={{fontSize:16}}>{formatDate(startDate)}</Text>
-                                <MaterialIcons name='date-range' size={12}/>
+                                    <View >
+                                        <Text style={styles.title}>Start Date</Text>
+                                        
+                                        <TouchableOpacity style={[styles.pickerbox]} onPress={()=>setStartDatePickerV(true)} >
+                                            <Text style={{fontSize:16}}>{formatDate(startDate)}</Text>
+                                            <MaterialIcons name='date-range' size={12}/>
 
-                            </TouchableOpacity>
+                                        </TouchableOpacity>
 
-                            <DateTimePickerModal
-                                isVisible={isStartDatePickerVisible}
-                                mode='date'
-                                onConfirm={handleConfirmStartDate}
-                                onCancel={()=>setStartDatePickerV(false)}
-                                minimumDate={new Date()}
-                                
-                                />
+                                        <DateTimePickerModal
+                                            isVisible={isStartDatePickerVisible}
+                                            mode='date'
+                                            onConfirm={handleConfirmStartDate}
+                                            onCancel={()=>setStartDatePickerV(false)}
+                                            minimumDate={new Date()}
+                                            
+                                            />
 
-                         </View>
+                                    </View>
 
-                         <View >
+                                <View >
                             <Text style={styles.title}>End Date</Text>
                            
                             
@@ -703,9 +826,9 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
                          </View>
 
 
-                          <View style={{flexDirection:'row', justifyContent:'space-evenly'}}>
+                          <View style={{flexDirection:'row',padding:10,flex:1,justifyContent:'space-evenly'}}>
 
-                         <View>
+                         <View  >
                            
                             <Text style={styles.title}>Start Time</Text>
                             <TouchableOpacity style={[styles.pickerbox, ]} onPress={handleConfirmStartTime} >
@@ -774,8 +897,8 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
 
                                 </View>
 
-                                
-                         <View >
+                                <View style={{flexDirection:'row', padding:10, flex:1,justifyContent:'space-evenly'}}>
+                                     <View >
                              <Text style={styles.title}>Start Date</Text>
                             
                             <TouchableOpacity style={[styles.pickerbox]} onPress={()=>setStartDatePickerV(true)} >
@@ -815,17 +938,17 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
 
     
                          </View>
-
-                                
+                                </View>
 
                                 <View style={{flexDirection:'row', justifyContent:'space-evenly'}}>
 
                                     <View>
                                     
                                         <Text style={styles.title}>Start Time</Text>
+
                                         <TouchableOpacity style={[styles.pickerbox, ]} onPress={handleConfirmStartTime} >
                                             <Text style={{fontSize:16}}>{formatTime(startTime)}</Text>
-                                            <MaterialIcons name='timer' size={24}/>
+                                            <MaterialIcons name='timer' size={12}/>
 
                                         </TouchableOpacity>
                                         <DateTimePickerModal
@@ -840,24 +963,24 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
 
                                 <View>
                             
-                            <Text style={styles.title}>End Time</Text>
-                            <TouchableOpacity style={[styles.pickerbox,]} onPress={handleConfirmEndTime} >
-                                <Text style={{fontSize:16}}>{formatTime(endTime)}</Text>
-                                <MaterialIcons name='timer' size={24}/>
+                                    <Text style={styles.title}>End Time</Text>
+                                    <TouchableOpacity style={[styles.pickerbox,]} onPress={handleConfirmEndTime} >
+                                        <Text style={{fontSize:16}}>{formatTime(endTime)}</Text>
+                                        <MaterialIcons name='timer' size={12}/>
 
-                            </TouchableOpacity>
+                                    </TouchableOpacity>
 
-                            <DateTimePickerModal
-                                isVisible={isEndTimePickerVisible}
-                                mode='time'
-                                onConfirm={handleConfirmEndTime}
-                                onCancel={()=>setEndTimePickerVi(false)}
-                               minimumDate={startTime? new Date(startTime):undefined}
-                                
-                                />
+                                    <DateTimePickerModal
+                                        isVisible={isEndTimePickerVisible}
+                                        mode='time'
+                                        onConfirm={handleConfirmEndTime}
+                                        onCancel={()=>setEndTimePickerVi(false)}
+                                    minimumDate={startTime? new Date(startTime):undefined}
+                                        
+                                        />
 
 
-                         </View>
+                                </View>
                             
                          </View>
 
@@ -967,7 +1090,7 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
                             <Text style={styles.label}>Bank Name</Text>
                             <TouchableOpacity onPress={() => setIsManualBank(!isManualBank)}>
                             <Text style={styles.linkText}>
-                                {isManualBank ? "Select from list" : "Bank not listed?"}
+                                {isManualBank ? "Select from list" : "Bank not listed? click here to enter manually"}
                             </Text>
                             </TouchableOpacity>
                         </View>
@@ -1037,6 +1160,10 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
                             </View>
                         ) : null}
 
+
+
+                        <View style={{marginTop:50}}></View>
+
                      
 
 
@@ -1070,7 +1197,7 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
       <View style={styles.headerContainer}>
         <TouchableOpacity>
           
-          <Text style={[{fontSize:20, fontWeight:'bold'}]}>EVENT</Text>
+          <Text style={[{fontSize:20, fontWeight:'bold'}]}>HostEasy</Text>
 
         </TouchableOpacity>
       <View style={styles.headerContainer}>
@@ -1083,7 +1210,7 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
 
         <TouchableOpacity style={[styles.iconPlaceholder, {backgroundColor:'red'}]}>
           
-          <Text style={styles.text}>H</Text>
+          <Text style={styles.text}>O</Text>
 
         </TouchableOpacity>
       </View>
@@ -1123,8 +1250,8 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
 
         <View style={{flexDirection:'row', justifyContent:'flex-end', alignItems:'baseline'}}>
             <Pressable style={styles.Button} onPress={handleSaveDraft}>
-                      {uploading ? (
-            <ActivityIndicator size="large" color="#0000ff" />
+                      {uploadingd ? (
+            <ActivityIndicator size="small" color="#0000ff" />
           ) : (
             <Text style={styles.buttontext}>Save as draft</Text>
           )}
@@ -1134,7 +1261,7 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
               <Pressable style={styles.Button} onPress={handleSaveAndContinue}>
                 
                    {uploading ? (
-            <ActivityIndicator size="large" color="#0000ff" />
+            <ActivityIndicator size="small" color="#0000ff" />
           ) : (
             <Text style={styles.buttontext}>Save and continue</Text>
           )}
@@ -1160,7 +1287,7 @@ const styles= StyleSheet.create({
         marginBottom:20,
         alignItems:'center'
     },
-   placeholderImage:{width:200,
+   placeholderImage:{width:'90%',
     height:200,
     backgroundColor:'#eee',
     borderRadius:10,
@@ -1169,12 +1296,14 @@ const styles= StyleSheet.create({
    },
    pickerbox:{
     backgroundColor:'white',
-    padding:15,
+    padding:5,
+    //minWidth:100,
+    width:150,
     borderRadius:8,
     borderWidth:1,
     borderColor:'#ddd',
     flexDirection:'row',
-    justifyContent:'space-between',
+    justifyContent:'space-evenly',
     alignItems:'center',
     marginBottom:10
    },
@@ -1183,7 +1312,7 @@ const styles= StyleSheet.create({
     borderColor:'#eee'
    },
    placeHoldertext:{color:'#888'},
-   image:{width:200,
+   image:{width:'90%',
     height:200,
     borderRadius:10
 },

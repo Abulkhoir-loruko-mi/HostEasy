@@ -23,11 +23,20 @@ export default function EventPage() {
   };
        
     
-         const goToCreateEvent = () => {
-       
-          navigation.navigate('CreateEvent');
-       
-        }
+              const goToCreateEvent = () => {
+            
+                navigation.navigate('CreateEvent');
+              }
+                const goTopublisgEvent = () => {
+                  navigation.navigate('PublishEvent');
+                }
+
+                 const gohome = () => {
+            
+                navigation.navigate('HomeScreen');
+              }
+
+
   return (
     <View>
       <Button title='Go to Create Event' onPress={
@@ -42,6 +51,14 @@ export default function EventPage() {
           color="#FF3B30" // iOS Red color for destructive actions
           onPress={handleLogout} 
         />
+
+           <Button title='Go to publish Event' onPress={
+             goTopublisgEvent
+            }></Button>
+
+            <Button title='Go home' onPress={gohome}>
+
+            </Button>
       </View>
 
 

@@ -5,9 +5,12 @@ import { supabase } from './lib/supabase';
 
 
 
-import CreateEvent from './createEvent';
+import CreateEvent from './CreateEvent';
 import EventPage from './EventPage';
 
+import EventDetails from './EventDetails';
+import HomeScreen from './HomeScreen';
+import Profile from './Profile';
 import PublishEvent from './PublishEvent';
 import SignIn from './signIn';
 import SignUp from './signUp';
@@ -31,6 +34,9 @@ const AppStack = () => {
     <Stack.Screen name="EventPage" component={EventPage} />
       <Stack.Screen name="CreateEvent" component={CreateEvent} />
       <Stack.Screen name="PublishEvent" component={PublishEvent} />
+       <Stack.Screen name="HomeScreen" component={HomeScreen} />
+        <Stack.Screen name="EventDetails" component={EventDetails} />
+         <Stack.Screen name="Profile" component={Profile} />
     </Stack.Navigator>
   );
 };

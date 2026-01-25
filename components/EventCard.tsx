@@ -1,0 +1,126 @@
+import { Ionicons } from '@expo/vector-icons';
+import { format, parseISO } from 'date-fns';
+import React from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+const EventCard = ({ event, onPress }:any) => {
+  const { title, image_url, start_date, location_type, location_details, is_paid, tickets } = event;
+
+  const formatEventDate = (isoString: string) => {
+    if (!isoString) return 'Date TBD';
+    try {
+      // Example output: "Sat, Oct 25 • 2:00 PM"
+      return format(parseISO(isoString), "EEE, MMM d • h:mm a");
+    } catch (e) {
+      return 'Invalid Date';
+    }
+  };
+
+  const getLocationText = () => {
+    if (location_type === 'online') {
+      return location_details?.platform || 'Online Event';
+    } else if (location_type === 'physical') {
+    
+      return location_details?.address || 'Physical Location';
+    }
+    return 'Hybrid / TBD';
+  };
+
+  const getPriceText = () => {
+    if (!is_paid || !tickets || tickets.length === 0) {
+      return <Text style={[styles.priceText, { color: 'green' }]}>Free</Text>;
+    }
+   
+    const prices = tickets.map((t: { price: any; }) => Number(t.price));
+    const minPrice = Math.min(...prices);
+    return <Text style={styles.priceText}>From ₦{minPrice.toLocaleString()}</Text>;
+  };
+
+  return (
+    // The entire card is clickable
+    <TouchableOpacity style={styles.cardContainer} onPress={onPress} activeOpacity={0.9}>
+      
+      {/* 1. Top Half: Image Banner */}
+      <Image
+        source={image_url ? { uri: image_url } : { uri: 'https://via.placeholder.com/400x200?text=No+Image' }}
+        style={styles.bannerImage}
+        resizeMode="cover"
+      />
+      {/* Optional Badge Example */}
+      {location_type === 'online' && (
+          <View style={styles.badge}><Text style={styles.badgeText}>Online</Text></View>
+      )}
+
+
+      {/* 2. Bottom Half: Details Area */}
+      <View style={styles.detailsContainer}>
+        {/* Date */}
+        <Text style={styles.dateText}>{formatEventDate(start_date)}</Text>
+        
+        {/* Title (limited to 2 lines) */}
+        <Text style={styles.titleText} numberOfLines={2}>{title}</Text>
+
+        {/* Location */}
+        <View style={styles.locationRow}>
+          <Ionicons 
+            name={location_type === 'online' ? 'videocam-outline' : 'location-outline'} 
+            size={16} color="#666" 
+            style={{marginRight: 4}}
+          />
+          <Text style={styles.locationText}>{getLocationText()}</Text>
+        </View>
+
+        {/* 3. The Action Row (New) */}
+        <View style={styles.actionRow}>
+           {/* Left Side: Price */}
+           <View style={{ justifyContent: 'center' }}>
+             {getPriceText()}
+           </View>
+
+           {/* Right Side: Attend Button (Visual only, click handled by parent touchable) */}
+           <View style={styles.attendButton}>
+             <Text style={styles.attendButtonText}>Attend Event</Text>
+           </View>
+        </View>
+
+      </View>
+    </TouchableOpacity>
+  );
+};
+const styles = StyleSheet.create({
+  cardContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden', // Keeps image rounded corners
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3, // Android shadow
+    marginHorizontal: 2 // Tiny margin for shadow visibility
+  },
+  bannerImage: { width: '100%', height: 150 },
+  badge: { position: 'absolute', top: 10, left: 10, backgroundColor: '#6f42c1', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4 },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  
+  detailsContainer: { padding: 15 },
+  dateText: { fontSize: 13, color: '#007BFF', fontWeight: '600', marginBottom: 6 },
+  titleText: { fontSize: 18, fontWeight: 'bold', color: '#222', marginBottom: 8, lineHeight: 24 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  locationText: { fontSize: 14, color: '#666' },
+
+  actionRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#eee'
+  },
+  priceText: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  attendButton: { backgroundColor: '#007BFF', paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20 },
+  attendButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+});
+
+export default EventCard;
