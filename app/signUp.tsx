@@ -7,11 +7,6 @@ import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'reac
 
 import { supabase } from '@/app/lib/supabase';
 
-//const userStorage = AsyncStorage('john')
-
-
-
-
 
 interface FormErrors{
   name?:string;

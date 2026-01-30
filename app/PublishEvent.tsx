@@ -1,9 +1,8 @@
 //import styles from '@/constants/styles';
 import { Ionicons } from '@expo/vector-icons';
-import { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useNavigation } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, Keyboard, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Keyboard, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { supabase } from './lib/supabase';
@@ -44,7 +43,7 @@ export default function PublishEvent({route}:any) {
 
         useEffect(()=>{
           const getUser=async()=>{
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user }, error } = await supabase.auth.getUser();
             setCreatorname(user?.user_metadata?.full_name || user?.email || 'Unknown user')
           }
           
@@ -149,9 +148,8 @@ export default function PublishEvent({route}:any) {
             [{ text: "OK", onPress: () => navigation.popToTop() }] // Go back home
         );
 
-    } catch (error) {
-      Alert.alert("Error",   "Could not publish event.");
-       // Alert.alert("Error", error.message || "Could not publish event.");
+    } catch (error:any) {
+        Alert.alert("Error", error.message || "Could not publish event.");
         console.error(error);
     } finally {
         setLoading(false);

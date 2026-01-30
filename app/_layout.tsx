@@ -10,6 +10,7 @@ import EventPage from './EventPage';
 
 import EventDetails from './EventDetails';
 import HomeScreen from './HomeScreen';
+import NotificationsScreen from './NotificationsScreen';
 import Profile from './Profile';
 import PublishEvent from './PublishEvent';
 import SignIn from './signIn';
@@ -37,6 +38,7 @@ const AppStack = () => {
        <Stack.Screen name="HomeScreen" component={HomeScreen} />
         <Stack.Screen name="EventDetails" component={EventDetails} />
          <Stack.Screen name="Profile" component={Profile} />
+         <Stack.Screen name="Notifications" component={NotificationsScreen} />
     </Stack.Navigator>
   );
 };

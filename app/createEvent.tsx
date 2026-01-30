@@ -30,10 +30,10 @@ const DATA=[{id:1, title:'Appearance', description:'upload image , event name an
 
 
 const platforms=[
-{label:'whatsapp', value:'whatsapp',icon:'whatsapp'},
-{label:'telegram', value:'telegram',icon:'telegram'},
-{label:'Youtube', value:'youtube',icon:'youtube'},
-{label:'Twitter', value:'twiter',icon:'twitter'}
+{label:'Whatsapp', value:'Whatsapp',icon:'whatsapp'},
+{label:'Telegram', value:'Telegram',icon:'telegram'},
+{label:'Youtube', value:'Youtube',icon:'youtube'},
+{label:'Twitter', value:'Twiter',icon:'twitter'}
 ]
 
 const language=[
@@ -53,6 +53,7 @@ export default function CreateEvent({navigation}:{navigation:any}) {
      const[uploadingd, setUploadingd]= useState(false)
     const [online, setOnline]=useState(false)
     const [physical, setPhysical]= useState(false)
+    const[address, setAddress]=useState('')
     const[PlatformLink, setPlatformlink]=useState('')
     const[selectedPlatform, setselectedPlat]=useState(null);
     const[selectedLanguage, setselectedLanguage]=useState('')
@@ -201,7 +202,7 @@ const saveEventToDB = async (status:any) => {
     platform: selectedPlatform,
     link: PlatformLink,         
   
-    address: physical
+    address: address
   },
     
     language: selectedLanguage,
@@ -218,7 +219,8 @@ const saveEventToDB = async (status:any) => {
     settlement_info: settlementPayload, // Saves as JSON
     
     status: isDraft ? 'draft' : 'published',
-    organizer_id: user?.id
+    organizer_id: user?.id,
+    creator_name: user?.user_metadata?.full_name
   };
 };
 
@@ -716,10 +718,17 @@ const combineDateAndTime = (dateObj: DateTimeObject | null, timeObj: DateTimeObj
 
                         {physical && (
                             <View>
-                                <Text style={[styles.title,{padding:10}]}>Add a place Description</Text>
+                                <Text style={[styles.title,{padding:10},errors.address && { borderColor: 'red' }]}>Add a place Description</Text>
                                 <TextInput
                                 style={styles.input}
-                                placeholder='Venue Address' />
+                                placeholder='Venue Address' 
+                                
+                                    value={address}
+                                onChangeText={(text) => {
+                                    setAddress(text)
+                                    
+                                    if (errors.address) setErrors({...errors, address: ''});
+                                }}/>
                             </View>
                         )}     
 

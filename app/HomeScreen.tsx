@@ -1,3 +1,4 @@
+import { registerForPushNotificationsAsync } from '@/app/lib/notifications';
 import { Ionicons } from '@expo/vector-icons';
 import React, { SetStateAction, useCallback, useEffect, useState } from 'react';
 import {
@@ -26,6 +27,7 @@ export default function HomeScreen({ navigation }:any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userName, setUserName] = useState('Friend');
+   const[creatorName, setCreatorname]= useState('loading...')
 
   // Filter States
   const [searchText, setSearchText] = useState('');
@@ -40,17 +42,42 @@ export default function HomeScreen({ navigation }:any) {
       {id: 'music', name: 'Music'},
   ];
 
+
+
+// Update this useEffect in screens/HomeScreen.js
+
+  // --- Fetch User Info on Mount ---
   useEffect(() => {
     const fetchUser = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-       // setCreatorname(user?.user_metadata?.full_name || user?.email || 'Unknown user')
-        if ( user?.user_metadata?.email) {
-             // Get first name
-             setUserName( user.user_metadata.email?.split('@')[0]);
+        // 1. Get the latest user object freshly from Supabase
+        const { data: { user }, error } = await supabase.auth.getUser();
+
+        if (error || !user) {
+            console.log("Error fetching user or no session:", error?.message);
+            return;
+        }
+
+
+   
+        let fullName = user.user_metadata?.full_name;
+
+       
+
+        // 4. Set the name if found
+        if (fullName) {
+             // Split by space and get the first part (the first name now my surname)
+             setUserName(fullName.split(' ')[0]);
+        } else {
+             console.log("Could not find 'full_name' in metadata.");
+            
+             // setUserName(user.email?.split('@')[0] || 'Friend');
         }
     };
     fetchUser();
+    registerForPushNotificationsAsync();
   }, []);
+
+
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -139,12 +166,29 @@ export default function HomeScreen({ navigation }:any) {
         
         {/* --- FIXED HEADER AREA --- */}
         <View style={styles.fixedHeader}>
-            {/* Greeting Row */}
+
+                        {/* Greeting Row */}
             <View style={styles.greetingRow}>
                 <Text style={styles.greetingText}>Hello, {userName} 👋</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-                     <View style={styles.profileIconPlaceholder}><Ionicons name="person" size={20} color="#fff"/></View>
-                </TouchableOpacity>
+                
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    {/* NEW: Notification Bell */}
+                    <TouchableOpacity 
+                        style={{ marginRight: 15, padding: 5 }} // Padding makes it easier to tap
+                        onPress={() => navigation.navigate('Notifications')}
+                    >
+                    <Ionicons name="notifications-outline" size={24} color="#333" />
+                        {/* Optional: Red Dot (Visual only for now) */}
+                      <View style={styles.redDot} /> 
+                    </TouchableOpacity>
+
+                    {/* Profile Icon (Existing) */}
+                    <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+                        <View style={styles.profileIconPlaceholder}>
+                            <Ionicons name="person" size={20} color="#fff"/>
+                        </View>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* Search Bar */}
@@ -185,7 +229,7 @@ export default function HomeScreen({ navigation }:any) {
                 data={events}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
-                    // Use the custom component and pass navigation
+                    
                     <EventCard 
                         event={item} 
                         onPress={() => navigation.navigate('EventDetails', { eventId: item.id })}
@@ -212,6 +256,19 @@ const styles = StyleSheet.create({
   greetingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   greetingText: { fontSize: 22, fontWeight: 'bold', color: '#333' },
   profileIconPlaceholder: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#ccc', justifyContent: 'center', alignItems: 'center' },
+
+  
+redDot: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'red',
+    borderWidth: 1,
+    borderColor: '#fff'
+},
   
   searchContainer: { flexDirection: 'row', backgroundColor: '#f0f2f5', borderRadius: 10, padding: 10, alignItems: 'center', marginBottom: 15 },
   searchInput: { flex: 1, fontSize: 16, color: '#333' },

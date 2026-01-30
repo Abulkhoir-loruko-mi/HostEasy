@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "525581077673",
+    "project_id": "hosteasy-6e414",
+    "storage_bucket": "hosteasy-6e414.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:525581077673:android:62146f8c1c2cc217dd2db8",
+        "android_client_info": {
+          "package_name": "com.Abulkhoir.HostEasy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_YsJC7bK1p1qpdgp3Fvyi2lI8L7v51jY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

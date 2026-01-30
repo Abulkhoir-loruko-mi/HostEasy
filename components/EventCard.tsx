@@ -4,7 +4,7 @@ import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const EventCard = ({ event, onPress }:any) => {
-  const { title, image_url, start_date, location_type, location_details, is_paid, tickets } = event;
+  const { title, image_url, start_date, is_online,is_physical, location_details, is_paid, tickets } = event;
 
   const formatEventDate = (isoString: string) => {
     if (!isoString) return 'Date TBD';
@@ -17,9 +17,10 @@ const EventCard = ({ event, onPress }:any) => {
   };
 
   const getLocationText = () => {
-    if (location_type === 'online') {
+    if (is_online) {
       return location_details?.platform || 'Online Event';
-    } else if (location_type === 'physical') {
+
+    } else if (is_physical) {
     
       return location_details?.address || 'Physical Location';
     }
@@ -47,8 +48,12 @@ const EventCard = ({ event, onPress }:any) => {
         resizeMode="cover"
       />
       {/* Optional Badge Example */}
-      {location_type === 'online' && (
+      {is_online && (
           <View style={styles.badge}><Text style={styles.badgeText}>Online</Text></View>
+      )}
+
+       {is_physical && (
+          <View style={styles.badge}><Text style={styles.badgeText}>Physical</Text></View>
       )}
 
 
@@ -61,14 +66,36 @@ const EventCard = ({ event, onPress }:any) => {
         <Text style={styles.titleText} numberOfLines={2}>{title}</Text>
 
         {/* Location */}
-        <View style={styles.locationRow}>
+       
+          {is_online && (
+               <View style={styles.locationRow}>
           <Ionicons 
-            name={location_type === 'online' ? 'videocam-outline' : 'location-outline'} 
+            name={is_online && 'videocam-outline' } 
             size={16} color="#666" 
             style={{marginRight: 4}}
           />
-          <Text style={styles.locationText}>{getLocationText()}</Text>
-        </View>
+          <Text style={styles.locationText}>{location_details.platform}</Text>
+          </View>
+            
+          
+          )}
+          
+        
+
+        
+           {is_physical && (
+             <View style={styles.locationRow}>
+            <Ionicons 
+              name={is_physical &&  'location-outline'} 
+              size={16} color="#666" 
+              style={{marginRight: 4}}
+            />
+
+            <Text style={styles.locationText}>{location_details.address}</Text>
+           </View>
+            
+            )}
+         
 
         {/* 3. The Action Row (New) */}
         <View style={styles.actionRow}>
