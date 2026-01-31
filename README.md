@@ -39,5 +39,5 @@
 
 1. **Clone the repository:**
    ```bash
-   git clone [[https://github.com/Abulkhoir-loruko-mi/myLearn.git](https://github.com/Abulkhoir-loruko-mi/myLearn.git)]()
+   git clone [[(https://github.com/Abulkhoir-loruko-mi/HostEasy.git)]](https://github.com/Abulkhoir-loruko-mi/HostEasy.git))]()
    cd HostEasy
