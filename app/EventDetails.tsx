@@ -160,30 +160,99 @@ export default function EventDetails({ route, navigation }: any) {
 
 
   // --- PAYMENT HANDLERS ---
-
   const handleBuyPress = () => {
-      // 1. If Free, just register immediately (Simple flow)
-      if (!eventData?.is_paid) {
-          Alert.alert("Success", "You have registered for this free event!");
-          return;
-      }
+    if (!eventData?.tickets || eventData.tickets.length === 0) return;
 
-      // 2. If Paid, show ticket selection modal
-      // If there's only 1 ticket type, select it automatically
-        if (eventData.tickets && eventData.tickets.length === 1) {
-            setSelectedTicket(eventData.tickets[0]);
+    // Case 1: Only one ticket type exists
+    if (eventData.tickets.length === 1) {
+        const ticket = eventData.tickets[0];
+        setSelectedTicket(ticket);
+        
+        const price = Number(ticket.price);
+
+        // CHECK: Is it Free?
+        if (price === 0) {
+             Alert.alert(
+                "Confirm Free Ticket", 
+                `Get a ${ticket.name} ticket for free?`,
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { 
+                        text: "Get Ticket", 
+                        onPress: () => processFreeBooking(ticket) 
+                    }
+                ]
+            );
+        } else {
+            // It's Paid -> Show Paystack
             setTimeout(() => setShowPaystack(true), 100);
-      } else {
-          setShowTicketModal(true);
-      }
-  };
+        }
+    } 
+    // Case 2: Multiple ticket types -> Open Modal
+    else {
+        setShowTicketModal(true);
+    }
+};
 
-const onTicketSelect = (ticket: TicketItem) => {
+ 
+
+  const onTicketSelect = async (ticket: TicketItem) => {
     setSelectedTicket(ticket);
     setShowTicketModal(false);
-    // Trigger Paystack
-    setTimeout(() => setShowPaystack(true), 500);
+
+    const price = Number(ticket.price);
+
+    // CHECK: Is it Free?
+    if (price === 0) {
+        // 1. Bypass Paystack completely
+        Alert.alert(
+            "Confirm Free Ticket", 
+            `Get a ${ticket.name} ticket for free?`,
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Get Ticket", 
+                    onPress: () => processFreeBooking(ticket) // <--- New Function
+                }
+            ]
+        );
+    } else {
+        // 2. It's Paid -> Show Paystack
+        setTimeout(() => setShowPaystack(true), 500);
+    }
 };
+
+
+const processFreeBooking = async (ticket: any) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Generate a dummy reference like "FREE-1709823..."
+    const freeReference = `FREE-${Date.now()}`;
+
+    // Insert directly into Supabase
+    const { error } = await supabase
+        .from('bookings')
+        .insert({
+            event_id: eventId,
+            user_id: currentUserId,
+            ticket_name: selectedTicket?.name || 'Free Ticket',
+            quantity: 1,
+            amount_paid: 0, // <--- Important: 0
+            status: 'confirmed',
+            payment_reference: freeReference
+        });
+
+    if (error) {
+        Alert.alert("Error", error.message);
+    } else {
+        Alert.alert("Success!", "Your free ticket has been booked. Check your email!");
+        // Optional: Navigate to My Tickets
+        navigation.navigate('MainTabs', { screen: 'My Tickets' });
+        // navigation.navigate('My Tickets');
+    }
+};
+
 
   const handlePaymentSuccess = async (res: any) => {
       // res contains transaction reference
@@ -206,6 +275,7 @@ const onTicketSelect = (ticket: TicketItem) => {
 
           Alert.alert("Success! 🎉", "Your ticket has been booked. Check your email.");
           // Ideally navigate to a "My Tickets" screen here
+          navigation.navigate('MainTabs', { screen: 'My Tickets' });
 
       } catch (e: any) {
           Alert.alert("Booking Error", "Payment successful but failed to save ticket. Contact support with ref: " + res.reference);
