@@ -12,7 +12,7 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.Abulkhoir.HostEasy", 
+      "package": "com.Abulkhoir.HostEasy",
       "googleServicesFile": "./google-services (1).json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -47,7 +47,12 @@
           "icon": "./assets/images/icon.png",
           "color": "#E6F4FE"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
