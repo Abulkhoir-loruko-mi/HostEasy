@@ -54,10 +54,17 @@ serve(async (req) => {
       dateLine = `${startDayStr} - ${endDayStr}`;
     }
 
-    // Determine correct location string
+// Determine correct location string with Clickable Links
     let locationText = "Location TBA";
     if (event.is_online) {
-      locationText = event.location_details?.platform || "Online Event";
+      const platform = event.location_details?.platform || "Online Event";
+      const link = event.location_details?.link;
+      
+      if (link) {
+        locationText = `<a href="${link}" style="color: #007BFF; text-decoration: underline; font-weight: bold;">Join on ${platform}</a>`;
+      } else {
+        locationText = platform;
+      }
     } else if (event.location_details?.address) {
       locationText = event.location_details.address;
     }
